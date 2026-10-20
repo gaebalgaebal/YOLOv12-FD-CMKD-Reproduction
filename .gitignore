@@ -4,3 +4,15 @@ yolov12n.pt
 yolov12s.pt
 yolov12x.pt
 flash_attn*.whl
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+datasets/
+output/
+tmp/
+*.pt
+*.onnx
+*.engine
+*.lock
+*.pid

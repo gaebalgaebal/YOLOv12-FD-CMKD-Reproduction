@@ -1,0 +1,34 @@
+{
+  "stage": "seed0",
+  "functional_pass": true,
+  "seed0_pass": false,
+  "criteria": {
+    "last3_delta_min": 0.001,
+    "official_best_delta_must_be_positive": true
+  },
+  "last3_delta": -0.00013666666666667382,
+  "official_best_delta": -0.000361923647219875,
+  "run_additional_seeds": false,
+  "summary": [
+    {
+      "seed": 0,
+      "arm": "no_kd",
+      "experiment": "no-KD",
+      "last_epoch_map50_95": 0.50712,
+      "last3_mean_map50_95": 0.50721,
+      "best_training_map50_95": 0.50861,
+      "best_training_epoch": 20,
+      "runtime_hours": 23.409583333333334
+    },
+    {
+      "seed": 0,
+      "arm": "fd_cmkd",
+      "experiment": "FD-CMKD",
+      "last_epoch_map50_95": 0.50719,
+      "last3_mean_map50_95": 0.5070733333333334,
+      "best_training_map50_95": 0.50845,
+      "best_training_epoch": 28,
+      "runtime_hours": 49.12086111111111
+    }
+  ]
+}

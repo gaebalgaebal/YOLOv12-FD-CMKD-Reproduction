@@ -263,6 +263,7 @@ def _ensure_fd_cmkd_modules(model, teacher):
     low_freq_weight = float(os.environ.get("YOLO_FD_LOW_W", "1.0"))
     high_freq_weight = float(os.environ.get("YOLO_FD_HIGH_W", "1.0"))
     fd_loss_weight = float(os.environ.get("YOLO_FD_LOSS_W", "1.0"))
+    loss_reduction = os.environ.get("YOLO_FD_REDUCTION", "mean")
     device = next(model.parameters()).device
     model.fd_cmkd_student_channels = s_channels
     model.fd_cmkd_teacher_channels = t_channels
@@ -270,6 +271,7 @@ def _ensure_fd_cmkd_modules(model, teacher):
     model.fd_cmkd_low_freq_weight = low_freq_weight
     model.fd_cmkd_high_freq_weight = high_freq_weight
     model.fd_cmkd_loss_weight = fd_loss_weight
+    model.fd_cmkd_loss_reduction = loss_reduction
     model.fd_cmkd_adapters = nn.ModuleList([FDFeatureAdapter(sc, tc) for sc, tc in zip(s_channels, t_channels)]).to(device)
     model.fd_cmkd_blocks = nn.ModuleList([
         FD_NLKD_Loss(
@@ -278,6 +280,7 @@ def _ensure_fd_cmkd_modules(model, teacher):
             low_freq_weight=low_freq_weight,
             high_freq_weight=high_freq_weight,
             loss_weight=fd_loss_weight,
+            loss_reduction=loss_reduction,
         ) for tc in t_channels
     ]).to(device)
     if int(os.environ.get("RANK", "0")) == 0:
@@ -833,6 +836,7 @@ class FDCMKDDetectionLoss(v8DetectionLoss):
         self.low_freq_weight = getattr(model, "fd_cmkd_low_freq_weight", float(os.environ.get("YOLO_FD_LOW_W", "1.0")))
         self.high_freq_weight = getattr(model, "fd_cmkd_high_freq_weight", float(os.environ.get("YOLO_FD_HIGH_W", "1.0")))
         self.fd_loss_weight = getattr(model, "fd_cmkd_loss_weight", float(os.environ.get("YOLO_FD_LOSS_W", "1.0")))
+        self.fd_loss_reduction = getattr(model, "fd_cmkd_loss_reduction", os.environ.get("YOLO_FD_REDUCTION", "mean"))
         self.debug_steps = int(os.environ.get("YOLO_FD_CMKD_DEBUG_STEPS", "3"))
         self.debug_seen = 0
         self.teacher.eval()
@@ -840,11 +844,18 @@ class FDCMKDDetectionLoss(v8DetectionLoss):
             p.requires_grad = False
         self.last_kd = None
         self.last_kd_scales = None
+        self.last_kd_low_scales = None
+        self.last_kd_high_scales = None
+        self.last_kd_effective_scales = None
         self.last_head_kd = None
         self.last_cls_kd = None
         self.last_reg_kd = None
         self.last_feat_scale = None
         self.last_head_scale = None
+        # Live graph tensors are exposed only for the standalone, no-step FD probe.
+        # Keeping this disabled avoids retaining training graphs in normal runs.
+        self.capture_probe_tensors = os.environ.get("YOLO_FD_CAPTURE_PROBE", "0") == "1"
+        self.last_probe_tensors = None
 
     @staticmethod
     def _schedule_ratio(epoch, total_epochs, warmup_epochs, decay_start, min_ratio):
@@ -917,9 +928,14 @@ class FDCMKDDetectionLoss(v8DetectionLoss):
         t = getattr(self.t_det, "_fd_kd_t", None)
         if s is None or t is None:
             self.last_kd = det_loss.new_zeros(())
+            self.last_kd_scales = det_loss.new_zeros((0, ))
+            self.last_kd_low_scales = det_loss.new_zeros((0, ))
+            self.last_kd_high_scales = det_loss.new_zeros((0, ))
+            self.last_kd_effective_scales = det_loss.new_zeros((0, ))
             self.last_head_kd = det_loss.new_zeros(())
             self.last_cls_kd = det_loss.new_zeros(())
             self.last_reg_kd = det_loss.new_zeros(())
+            self.last_probe_tensors = None
             return det_loss, items
         if len(s) != len(t):
             raise RuntimeError(f"FD-CMKD feature count mismatch: {len(s)} vs {len(t)}")
@@ -930,8 +946,14 @@ class FDCMKDDetectionLoss(v8DetectionLoss):
         kd_total = det_loss.new_zeros(())
         scale_logs = []
         scale_losses = []
+        scale_loss_tensors = []
+        scale_low_losses = []
+        scale_high_losses = []
+        raw_student_features = []
+        scale_adapter_parameters = []
         for idx, (w, fs, ft, adapter, fd_block) in enumerate(
                 zip(self.kd_scales, s, t, self.adapters, self.fd_cmkd_blocks)):
+            fs_raw = fs
             fs_raw_shape = tuple(fs.shape)
             ft = ft.detach()
             fs = adapter(fs)
@@ -940,17 +962,25 @@ class FDCMKDDetectionLoss(v8DetectionLoss):
                 fs = F.interpolate(fs, size=ft.shape[-2:], mode="bilinear", align_corners=False)
             fd_loss = fd_block(fs, ft)
             kd_total = kd_total + float(w) * fd_loss
+            scale_loss_tensors.append(fd_loss)
             scale_losses.append(fd_loss.detach())
             low_loss = getattr(fd_block, "last_low_loss", None)
             high_loss = getattr(fd_block, "last_high_loss", None)
-            low_text = f"{float(low_loss):.4f}" if low_loss is not None else "n/a"
-            high_text = f"{float(high_loss):.4f}" if high_loss is not None else "n/a"
+            scale_low_losses.append(low_loss if low_loss is not None else fd_loss.detach().new_nan(()))
+            scale_high_losses.append(high_loss if high_loss is not None else fd_loss.detach().new_nan(()))
+            if self.capture_probe_tensors:
+                raw_student_features.append(fs_raw)
+                scale_adapter_parameters.append(tuple(p for p in adapter.parameters() if p.requires_grad))
+            low_text = f"{float(low_loss):.6e}" if low_loss is not None else "n/a"
+            high_text = f"{float(high_loss):.6e}" if high_loss is not None else "n/a"
             scale_logs.append(
                 f"P{idx + 3}: raw_s={fs_raw_shape}, adapted_s={fs_adapted_shape}, teacher={tuple(ft.shape)}, "
-                f"loss={float(fd_loss.detach()):.4f}, low={low_text}, high={high_text}, w={float(w):.2f}"
+                f"loss={float(fd_loss.detach()):.6e}, low={low_text}, high={high_text}, w={float(w):.2f}"
             )
         self.last_kd = kd_total.detach()
         self.last_kd_scales = torch.stack(scale_losses) if scale_losses else kd_total.new_zeros((0, ))
+        self.last_kd_low_scales = torch.stack(scale_low_losses) if scale_low_losses else kd_total.new_zeros((0, ))
+        self.last_kd_high_scales = torch.stack(scale_high_losses) if scale_high_losses else kd_total.new_zeros((0, ))
         head_kd = det_loss.new_zeros(())
         cls_kd = det_loss.new_zeros(())
         reg_kd = det_loss.new_zeros(())
@@ -960,6 +990,21 @@ class FDCMKDDetectionLoss(v8DetectionLoss):
         self.last_head_kd = head_kd.detach()
         self.last_cls_kd = cls_kd.detach()
         self.last_reg_kd = reg_kd.detach()
+        effective_scale_losses = tuple(
+            (self.kd_w * feat_scale) * float(w) * scale_loss
+            for w, scale_loss in zip(self.kd_scales, scale_loss_tensors)
+        )
+        self.last_kd_effective_scales = (
+            torch.stack([loss.detach() for loss in effective_scale_losses])
+            if effective_scale_losses else kd_total.new_zeros((0, ))
+        )
+        if self.capture_probe_tensors:
+            self.last_probe_tensors = {
+                "det_loss": det_loss,
+                "raw_student_features": tuple(raw_student_features),
+                "effective_scale_losses": effective_scale_losses,
+                "adapter_parameters": tuple(scale_adapter_parameters),
+            }
         if int(os.environ.get("RANK", "0")) == 0 and not hasattr(self, "_fd_cmkd_printed"):
             LOGGER.info("FD-CMKD loss active: non-local feature KD + DC filter + low/high-pass + MSE/LogMSE")
             self._fd_cmkd_printed = True
@@ -971,10 +1016,11 @@ class FDCMKDDetectionLoss(v8DetectionLoss):
                         f"student_channels={self.student_channels} teacher_channels={self.teacher_channels} "
                         f"low_keep_ratio={self.low_keep_ratio} low_w={self.low_freq_weight} "
                         f"high_w={self.high_freq_weight} fd_loss_w={self.fd_loss_weight} "
+                        f"fd_reduction={self.fd_loss_reduction} "
                         f"feat_scale={float(feat_scale):.3f} head_scale={float(head_scale):.3f} "
-                        f"det_loss={float(det_loss.detach()):.4f} feature_kd={float(kd_total.detach()):.4f} "
-                        f"head_kd={float(head_kd.detach()):.4f} cls_kd={float(cls_kd):.4f} "
-                        f"reg_kd={float(reg_kd):.4f} total_loss={float(total_loss.detach()):.4f}")
+                        f"det_loss={float(det_loss.detach()):.6e} feature_kd={float(kd_total.detach()):.6e} "
+                        f"head_kd={float(head_kd.detach()):.6e} cls_kd={float(cls_kd):.6e} "
+                        f"reg_kd={float(reg_kd):.6e} total_loss={float(total_loss.detach()):.6e}")
             for msg in scale_logs:
                 LOGGER.info(f"FD-CMKD debug    {msg}")
             self.debug_seen += 1

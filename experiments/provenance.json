@@ -1,0 +1,28 @@
+{
+  "experiment_id": "fd_cmkd_reproduction_2026-09-25",
+  "upstream_commit": "548f2e26f1e082ae4a1e4c3e435a08e5daa1e09a",
+  "implementation": "corrected_low_lr_sample_sum",
+  "environment": {
+    "python": "3.10.12",
+    "pytorch": "2.7.1+cu128",
+    "cuda_runtime": "12.8",
+    "gpu": "NVIDIA GeForce RTX 5080",
+    "gpu_memory_mib": 16303,
+    "driver": "580.82.07"
+  },
+  "data": {
+    "dataset": "COCO 2017 train/val",
+    "image_size": 640
+  },
+  "starting_checkpoint": {
+    "baseline_best_sha256": "8efd99b51e0011b6ae15df51adb24dc71ee5a541e130d936c28678623c7f78b4"
+  },
+  "stage15_resume_checkpoints": {
+    "no_kd_sha256": "8589eb2d0b5290f4b399fafbdd7d31f56e12518cf54349b53a20c106431b4a32",
+    "fd_cmkd_sha256": "6fda5d6769ba376f48a740be61c8d9762be734a7a9fde3c15dffc4f5ad6a57c8"
+  },
+  "continuation_policy": {
+    "seed0_delta_threshold": 0.001,
+    "additional_seeds": "run only if seed 0 passes"
+  }
+}

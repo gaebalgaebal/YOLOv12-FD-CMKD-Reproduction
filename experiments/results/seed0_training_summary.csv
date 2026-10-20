@@ -1,0 +1,3 @@
+﻿seed,arm,experiment,last_epoch_map50_95,last3_mean_map50_95,best_training_map50_95,best_training_epoch,runtime_hours
+0,no_kd,no-KD,0.50712,0.50721,0.50861,20,23.409583333333334
+0,fd_cmkd,FD-CMKD,0.50719,0.5070733333333334,0.50845,28,49.12086111111111

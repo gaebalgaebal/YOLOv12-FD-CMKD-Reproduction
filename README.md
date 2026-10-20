@@ -1,563 +1,135 @@
-<h2 align="center">YOLOv12-Distillation</h2>
+# YOLOv12 FD-CMKD Reproduction
 
-<p align="center">
-  <strong>YOLOv12 X to M Knowledge Distillation</strong>
-  <br>
-  <strong>Plain KD · CanKD · FD-CMKD · Head Output KD</strong>
-</p>
+[한국어 요약](#한국어-요약) · [Method](docs/methodology.md) · [Results](docs/results.md) · [Follow-up experiments](docs/follow-up-experiments.md)
 
-<p align="center">
-  <a href="https://github.com/YoungJae1559/YOLOv12-Distillation">
-    <strong><code>💻 Source Code</code></strong>
-  </a>
-</p>
+> [!IMPORTANT]
+> This is an **unofficial research fork** of
+> [VIPLAB-Gachon/YOLOv12-Distillation](https://github.com/VIPLAB-Gachon/YOLOv12-Distillation).
+> It evaluates an experimental `sample_sum` FD loss variant. It is neither an origin-strict
+> reproduction nor a paper-faithful implementation of FD-CMKD.
 
-<p align="center">
-  <img src="figure/Figure1.png" width="95%">
-</p>
+## Main finding
 
-<p align="center">
-  <strong>Overview of YOLOv12 X to M distillation strategies.</strong>
-</p>
+The original implementation L2-normalizes each `C x H x W` feature tensor and then applies
+mean-reduced MSE. A no-step gradient probe found that the effective FD feature contribution was
+about `3.48e-7` of the detection loss, with a combined FD/detection gradient RMS ratio of
+`2.20e-8`. The feature path existed and produced finite values, but its training signal was
+negligible under the tested configuration.
 
----
+This fork adds an opt-in `sample_sum` reduction:
 
-## 🔥 News
+```python
+# Original
+F.mse_loss(student, teacher)
 
-- This repository provides a YOLOv12-based knowledge distillation framework.
-- The default setting is **YOLOv12-X teacher to YOLOv12-M student**.
-- Supported distillation modes include **Plain KD**, **CanKD**, **Head-only KD**, and **FD-CMKD**.
-- Pretrained weights and experiment outputs are not included in this repository.
-
----
-
-## Overview
-
-This repository implements knowledge distillation for YOLOv12 object detection.
-
-The goal is to transfer knowledge from a high-capacity teacher model to a compact student model.
-
-```text
-Teacher model : YOLOv12-X
-Student model : YOLOv12-M
-Dataset       : COCO
-Input size    : 640
-Batch size    : 16
-Epochs        : 50
+# Experimental variant
+(student - teacher).square().flatten(1).sum(1).mean()
 ```
 
-The distillation framework supports both feature-level and head-level knowledge transfer.
+`sample_sum` made the FD gradients measurable and passed the predefined signal gate. However, in
+the controlled seed-0 comparison it did **not** improve COCO AP over a no-KD control.
 
-```text
-1. Plain KD
-   - Direct feature distillation
-   - Head output distillation
+| Arm | Official COCO best AP50-95 | AP50 | AP75 | Runtime |
+|---|---:|---:|---:|---:|
+| no-KD | 0.509587 | 0.682849 | 0.553995 | 23.41 h |
+| FD-CMKD `sample_sum` | 0.509225 | 0.683365 | 0.554096 | 49.12 h |
+| Difference | **-0.000362** | +0.000516 | +0.000101 | +25.71 h |
 
-2. CanKD
-   - Cross-attention non-local feature distillation
-   - Teacher-student feature relation transfer
+The last-three-epoch AP50-95 difference was `-0.000137`. Only seed 0 was completed, so this is
+evidence of **no observed gain**, not proof that the expected effect is exactly zero.
 
-3. Head-only KD
-   - Classification logit distillation
-   - Box regression and DFL distillation
-   - Feature KD disabled
+![Official COCO AP comparison](experiments/figures/official_ap_seed0.png)
 
-4. FD-CMKD
-   - Frequency-decoupled feature distillation
-   - Low-frequency feature alignment
-   - High-frequency feature regularization
-```
+## Why `sample_sum` was tested
 
----
+For the aligned feature shapes in this experiment, replacing an element mean with a per-sample
+sum changes the loss scale by exactly the number of feature elements:
 
-## Repository Structure
+| Level | Shape | `sample_sum / mean` |
+|---|---:|---:|
+| P3 | `384 x 80 x 80` | 2,457,600x |
+| P4 | `768 x 40 x 40` | 1,228,800x |
+| P5 | `768 x 20 x 20` | 307,200x |
 
-```text
-YOLOv12-Distillation/
-├── assets/
-├── datasets/
-├── docker/
-├── examples/
-├── logs/
-├── runs/
-├── tests/
-├── tools/
-├── ultralytics/
-├── ultralytics.egg-info/
-├── app.py
-├── coco.yaml
-├── mkdocs.yml
-├── pyproject.toml
-├── README.md
-├── References.txt
-├── requirements.txt
-└── .gitignore
-```
+This is intentionally a diagnostic intervention, not a small numerical correction. It changes
+the objective and changes the relative scaling of pyramid levels. Results from this branch must
+not be reported as results from the upstream implementation.
 
-The following files are typically excluded from Git tracking.
+## What changed
 
-```text
-runs/
-yolov12m.pt
-yolov12n.pt
-yolov12s.pt
-yolov12x.pt
-flash_attn*.whl
-```
+- `YOLO_FD_REDUCTION=mean` preserves upstream behavior and remains the default.
+- `YOLO_FD_REDUCTION=sample_sum` enables the experimental reduction.
+- Per-level low/high/raw/effective FD losses can be captured for diagnostics.
+- Live graph tensors are retained only when `YOLO_FD_CAPTURE_PROBE=1`.
+- Included experiment artifacts contain the configs, hashes, official COCO metrics, signal probes,
+  and figures needed to audit the reported result.
 
----
+## Experiment scope
 
-## Installation
+The controlled comparison used:
+
+- COCO 2017, image size 640
+- YOLOv12-X teacher and YOLOv12-M student
+- identical baseline-derived starting checkpoint for both arms
+- 45 total epochs, batch 12, seed 0, deterministic mode, AMP
+- SGD, `lr0=0.0005`, momentum 0.9, warmup 0
+- FD arm only: `sample_sum`, feature KD weight 0.1, head KD weight 0.2
+
+Training continued from separately materialized stage-15 checkpoints with equivalent provenance.
+This differs from the upstream README recipe (`50` epochs, batch `16`, default optimizer/LR,
+original `mean` reduction).
+
+## Reproduction entry points
+
+Set up the upstream dependencies and provide COCO plus the YOLOv12-M/X checkpoints as described by
+the original project. The reduction is selected through an environment variable:
 
 ```bash
-conda create -n yolov12 python=3.11 -y
-conda activate yolov12
-
-git clone https://github.com/YoungJae1559/YOLOv12-Distillation.git
-cd YOLOv12-Distillation
-
-pip install -r requirements.txt
-pip install -e .
+export YOLO_FD_REDUCTION=sample_sum
+export YOLO_FD_CAPTURE_PROBE=0
 ```
 
-If FlashAttention is required, install it manually according to the CUDA and PyTorch version.
+Use the archived configs in [`experiments/configs`](experiments/configs) as an exact record of the
+completed run. Checkpoint and dataset paths are placeholders and must be adapted locally.
+
+Run the focused reduction tests with:
 
 ```bash
-pip install flash-attn --no-build-isolation
+python3 -m unittest tests.test_fd_sample_sum
 ```
 
-If a local wheel file is used, install it as follows.
-
-```bash
-pip install flash_attn-2.7.3+cu11torch2.2cxx11abiFALSE-cp311-cp311-linux_x86_64.whl
-```
-
----
-
-## Environment Notes
-
-Some environments may require explicit runtime configuration for stable PyTorch and Ultralytics execution.
-
-```bash
-export REPO_ROOT=$(pwd)
-export MPLCONFIGDIR=/tmp/mpl
-export YOLO_CONFIG_DIR=/tmp/yolo_cfg
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$CONDA_PREFIX/lib/python3.11/site-packages/torch/lib
-export MKL_THREADING_LAYER=GNU
-export OMP_NUM_THREADS=1
-export KMP_DUPLICATE_LIB_OK=TRUE
-```
-
-If you encounter `Intel MKL FATAL ERROR` or `libtorch_cpu.so` loading issues, retry training after applying the environment variables above and reducing dataloader workers if needed, e.g. `workers=0` or `workers=4`.
-
----
-
-## Checkpoint Preparation
-
-This repository does not include YOLOv12 pretrained weights because large checkpoint files are excluded from Git.
-
-Place the required `.pt` files in the project root directory.
-
-```text
-YOLOv12-Distillation/
-├── yolov12m.pt
-├── yolov12n.pt
-├── yolov12s.pt
-└── yolov12x.pt
-```
-
-The default teacher checkpoint is:
-
-```text
-${REPO_ROOT}/yolov12x.pt
-```
-
-The default baseline student checkpoint is:
-
-```text
-${REPO_ROOT}/runs/detect/yolov12m/weights/best.pt
-```
-
----
-
-## Dataset Preparation
-
-The default dataset configuration is `coco.yaml`.
-
-```text
-${REPO_ROOT}/coco.yaml
-```
-
-Before training, check whether the dataset path inside `coco.yaml` is correctly configured.
-
-```bash
-cat ${REPO_ROOT}/coco.yaml
-```
-
----
-
-## Baseline YOLOv12-M Training
-
-Before distillation, train the YOLOv12-M student model.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-CUDA_VISIBLE_DEVICES=1 yolo detect train \
-  model=${REPO_ROOT}/yolov12m.pt \
-  data=${REPO_ROOT}/coco.yaml \
-  epochs=50 \
-  imgsz=640 \
-  batch=16 \
-  device=0 \
-  amp=True \
-  name=yolov12m
-```
-
-The trained baseline checkpoint will be saved to:
-
-```text
-${REPO_ROOT}/runs/detect/yolov12m/weights/best.pt
-```
-
----
-
-## 1. Plain KD Training
-
-Plain KD uses direct feature distillation and head output distillation.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-CUDA_VISIBLE_DEVICES=1 \
-YOLO_TEACHER=${REPO_ROOT}/yolov12x.pt \
-YOLO_KD_TYPE=plain_kd \
-YOLO_KD_W=0.1 \
-YOLO_KD_HEAD_W=0.2 \
-YOLO_KD_HEAD_CLS_W=1.0 \
-YOLO_KD_HEAD_REG_W=1.0 \
-YOLO_KD_HEAD_TAU=2.0 \
-YOLO_KD_HEAD_MIN_CONF=0.1 \
-YOLO_KD_P3=0.25 \
-YOLO_KD_P4=1.0 \
-YOLO_KD_P5=1.0 \
-YOLO_PLAIN_FEAT_W=1.0 \
-yolo detect train \
-  model=${REPO_ROOT}/runs/detect/yolov12m/weights/best.pt \
-  data=${REPO_ROOT}/coco.yaml \
-  epochs=50 \
-  imgsz=640 \
-  batch=16 \
-  device=0 \
-  amp=True \
-  name=yolov12m_plainkd_x2m
-```
-
----
-
-## 2. CanKD Training
-
-CanKD transfers teacher-student feature relations using cross-attention non-local distillation.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-CUDA_VISIBLE_DEVICES=1 \
-YOLO_TEACHER=${REPO_ROOT}/yolov12x.pt \
-YOLO_KD_TYPE=cankd \
-YOLO_KD_W=0.15 \
-YOLO_KD_HEAD_W=0.2 \
-YOLO_KD_HEAD_CLS_W=1.0 \
-YOLO_KD_HEAD_REG_W=1.0 \
-YOLO_KD_HEAD_TAU=2.0 \
-YOLO_KD_HEAD_MIN_CONF=0.1 \
-YOLO_KD_P3=0.5 \
-YOLO_KD_P4=1.0 \
-YOLO_KD_P5=1.25 \
-yolo detect train \
-  model=${REPO_ROOT}/runs/detect/yolov12m/weights/best.pt \
-  data=${REPO_ROOT}/coco.yaml \
-  epochs=50 \
-  imgsz=640 \
-  batch=16 \
-  device=0 \
-  amp=True \
-  name=yolov12m_cankd_x2m_main
-```
-
----
-
-## 3. Head-only KD
-
-Head-only KD disables feature KD and applies only teacher head-output distillation.
-
-### 3-1. Head-only KD from Scratch
-
-```bash
-export REPO_ROOT=$(pwd)
-
-CUDA_VISIBLE_DEVICES=1 \
-YOLO_TEACHER=${REPO_ROOT}/yolov12x.pt \
-YOLO_KD_TYPE=plain_kd \
-YOLO_KD_W=0.0 \
-YOLO_KD_HEAD_W=0.2 \
-YOLO_KD_HEAD_CLS_W=1.0 \
-YOLO_KD_HEAD_REG_W=1.0 \
-YOLO_KD_HEAD_TAU=2.0 \
-YOLO_KD_HEAD_MIN_CONF=0.1 \
-YOLO_KD_P3=0.0 \
-YOLO_KD_P4=0.0 \
-YOLO_KD_P5=0.0 \
-YOLO_PLAIN_FEAT_W=1.0 \
-yolo detect train \
-  model=yolov12m.yaml \
-  data=${REPO_ROOT}/coco.yaml \
-  epochs=50 \
-  imgsz=640 \
-  batch=16 \
-  device=0 \
-  amp=True \
-  workers=8 \
-  name=yolov12m_headonly_x2m
-```
-
-### 3-2. Head-only KD Fine-tuning after CanKD
-
-This stage is useful for short fine-tuning after CanKD training.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-CUDA_VISIBLE_DEVICES=1 \
-YOLO_TEACHER=${REPO_ROOT}/yolov12x.pt \
-YOLO_KD_TYPE=cankd \
-YOLO_KD_W=0.0 \
-YOLO_KD_HEAD_W=0.30 \
-YOLO_KD_HEAD_CLS_W=1.0 \
-YOLO_KD_HEAD_REG_W=1.0 \
-YOLO_KD_HEAD_TAU=2.0 \
-YOLO_KD_HEAD_MIN_CONF=0.20 \
-YOLO_KD_P3=0.0 \
-YOLO_KD_P4=0.0 \
-YOLO_KD_P5=0.0 \
-YOLO_KD_HEAD_WARMUP_EPOCHS=1 \
-YOLO_KD_HEAD_DECAY_START=0.95 \
-YOLO_KD_HEAD_DECAY_MIN_RATIO=0.95 \
-yolo detect train \
-  model=${REPO_ROOT}/runs/detect/yolov12m_cankd_x2m_main/weights/best.pt \
-  data=${REPO_ROOT}/coco.yaml \
-  epochs=15 \
-  imgsz=640 \
-  batch=16 \
-  device=0 \
-  amp=True \
-  lr0=0.0008 \
-  lrf=0.1 \
-  name=yolov12m_cankd_x2m_ft
-```
-
----
-
-## 4. FD-CMKD Training
-
-FD-CMKD performs frequency-decoupled feature distillation.
-
-Low-frequency components are aligned using MSE loss, while high-frequency components are regularized using log-scaled feature loss.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-CUDA_VISIBLE_DEVICES=1 \
-YOLO_TEACHER=${REPO_ROOT}/yolov12x.pt \
-YOLO_KD_TYPE=fd_cmkd \
-YOLO_KD_W=0.1 \
-YOLO_KD_HEAD_W=0.2 \
-YOLO_KD_HEAD_CLS_W=1.0 \
-YOLO_KD_HEAD_REG_W=1.0 \
-YOLO_KD_HEAD_TAU=2.0 \
-YOLO_KD_HEAD_MIN_CONF=0.1 \
-YOLO_KD_P3=0.25 \
-YOLO_KD_P4=1.0 \
-YOLO_KD_P5=1.0 \
-YOLO_FD_LOW_KEEP_RATIO=0.25 \
-YOLO_FD_LOW_W=1.0 \
-YOLO_FD_HIGH_W=0.5 \
-YOLO_FD_LOSS_W=1.0 \
-yolo detect train \
-  model=${REPO_ROOT}/runs/detect/yolov12m/weights/best.pt \
-  data=${REPO_ROOT}/coco.yaml \
-  epochs=50 \
-  imgsz=640 \
-  batch=16 \
-  device=0 \
-  amp=True \
-  name=yolov12m_fdcmkd_x2m
-```
-
----
-
-## Evaluation
-
-Evaluate a trained checkpoint on the validation set.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-yolo detect val \
-  model=${REPO_ROOT}/runs/detect/yolov12m_cankd_x2m_main/weights/best.pt \
-  data=${REPO_ROOT}/coco.yaml \
-  imgsz=640 \
-  batch=16 \
-  device=0
-```
-
-Evaluate the fine-tuned checkpoint.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-yolo detect val \
-  model=${REPO_ROOT}/runs/detect/yolov12m_cankd_x2m_ft/weights/best.pt \
-  data=${REPO_ROOT}/coco.yaml \
-  imgsz=640 \
-  batch=16 \
-  device=0
-```
-
----
-
-## Inference
-
-Run prediction using a trained distillation checkpoint.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-yolo detect predict \
-  model=${REPO_ROOT}/runs/detect/yolov12m_cankd_x2m_main/weights/best.pt \
-  source=/path/to/images \
-  imgsz=640 \
-  device=0 \
-  save=True
-```
-
----
-
-## Export
-
-Export the trained model to ONNX.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-yolo export \
-  model=${REPO_ROOT}/runs/detect/yolov12m_cankd_x2m_main/weights/best.pt \
-  format=onnx \
-  imgsz=640
-```
-
-Export the trained model to TensorRT engine.
-
-```bash
-export REPO_ROOT=$(pwd)
-
-yolo export \
-  model=${REPO_ROOT}/runs/detect/yolov12m_cankd_x2m_main/weights/best.pt \
-  format=engine \
-  imgsz=640 \
-  half=True
-```
-
----
-
-## Distillation Arguments
-
-| Argument | Description |
-|---|---|
-| `YOLO_TEACHER` | Path to the frozen YOLOv12-X teacher checkpoint |
-| `YOLO_KD_TYPE` | Distillation type: `plain_kd`, `cankd`, or `fd_cmkd` |
-| `YOLO_KD_W` | Overall feature distillation loss weight |
-| `YOLO_KD_HEAD_W` | Head output distillation loss weight |
-| `YOLO_KD_HEAD_CLS_W` | Classification logit distillation weight |
-| `YOLO_KD_HEAD_REG_W` | Box regression or DFL distillation weight |
-| `YOLO_KD_HEAD_TAU` | Temperature value for head output KD |
-| `YOLO_KD_HEAD_MIN_CONF` | Minimum teacher confidence threshold |
-| `YOLO_KD_P3` | P3 feature distillation weight |
-| `YOLO_KD_P4` | P4 feature distillation weight |
-| `YOLO_KD_P5` | P5 feature distillation weight |
-| `YOLO_PLAIN_FEAT_W` | Plain feature distillation weight |
-| `YOLO_FD_LOW_KEEP_RATIO` | Low-frequency keep ratio for FD-CMKD |
-| `YOLO_FD_LOW_W` | Low-frequency distillation weight |
-| `YOLO_FD_HIGH_W` | High-frequency distillation weight |
-| `YOLO_FD_LOSS_W` | Overall FD-CMKD loss weight |
-
----
-
-## Recommended Training Pipeline
-
-```text
-Step 1. Train YOLOv12-M baseline
-Step 2. Run Plain KD or CanKD
-Step 3. Run Head-only KD fine-tuning if needed
-Step 4. Run FD-CMKD for frequency-based distillation comparison
-Step 5. Evaluate all checkpoints under the same validation protocol
-```
-
----
-
-## Git Upload Note
-
-Large files and training outputs are typically excluded from this repository.
-
-```text
-runs/
-yolov12m.pt
-yolov12n.pt
-yolov12s.pt
-yolov12x.pt
-flash_attn*.whl
-```
-
-To apply the same `.gitignore` setting:
-
-```bash
-printf "%s\n" \
-"runs/" \
-"yolov12m.pt" \
-"yolov12n.pt" \
-"yolov12s.pt" \
-"yolov12x.pt" \
-"flash_attn*.whl" > .gitignore
-```
-
-If these files were already tracked by Git, remove them from Git tracking only.
-
-```bash
-git rm -r --cached --ignore-unmatch runs
-git rm --cached --ignore-unmatch yolov12m.pt
-git rm --cached --ignore-unmatch yolov12n.pt
-git rm --cached --ignore-unmatch yolov12s.pt
-git rm --cached --ignore-unmatch yolov12x.pt
-git rm --cached --ignore-unmatch flash_attn*.whl
-```
-
----
-
-## Acknowledgement
-
-This repository is based on YOLOv12 and Ultralytics-style training code.
-
-We thank the original YOLOv12 authors and the Ultralytics open-source community for their excellent work.
-
----
-
-## Citation
-
-```BibTeX
-@article{tian2025yolov12,
-  title={YOLOv12: Attention-Centric Real-Time Object Detectors},
-  author={Tian, Yunjie and Ye, Qixiang and Doermann, David},
-  journal={arXiv preprint arXiv:2502.12524},
-  year={2025}
-}
-```
+## Repository guide
+
+- [`docs/methodology.md`](docs/methodology.md): equations, signal probe, and experimental design
+- [`docs/results.md`](docs/results.md): COCO/TIDE results and interpretation boundaries
+- [`docs/original-vs-current.md`](docs/original-vs-current.md): upstream, paper, and fork differences
+- [`docs/follow-up-experiments.md`](docs/follow-up-experiments.md): prioritized remaining experiments
+- [`experiments/configs`](experiments/configs): archived training arguments
+- [`experiments/results`](experiments/results): machine-readable evidence
+- [`experiments/figures`](experiments/figures): result and diagnostic figures
+- [`NOTICE.md`](NOTICE.md): provenance, attribution, and licensing notes
+
+## Known limitations
+
+- One seed only; the observed delta is too small for a robust statistical conclusion.
+- This is not an origin-strict run and does not establish the performance of upstream `mean` at
+  the exact README settings.
+- The upstream frequency mask is not vertically conjugate-symmetric for `rfft2`; this fork records
+  the issue but does not change the mask.
+- Upstream FD-CMKD is a same-modal YOLO feature-map adaptation and differs substantially from the
+  cross-modal, feature-vector formulation in the referenced paper.
+- Checkpoints and COCO predictions are excluded because of size. Their SHA-256 hashes are retained.
+
+## 한국어 요약
+
+원본 FD loss는 전체 feature를 unit L2 normalization한 뒤 `C x H x W` 원소 평균 MSE를 다시
+적용하여, 측정된 FD gradient가 detection gradient 대비 사실상 무시할 수 있는 수준이었습니다.
+이를 진단하기 위해 원소 합 기반 `sample_sum`을 선택적으로 추가했습니다. FD 신호는 충분히
+커졌지만, 동일 시작점과 설정의 seed 0 비교에서 no-KD 대비 공식 COCO AP50-95가
+`0.000362` 낮았습니다. 따라서 현재 결론은 **기능 신호는 복구됐지만 성능 향상은 재현되지
+않았다**입니다. 후속 실험은 [로드맵](docs/follow-up-experiments.md)에 우선순위별로 정리했습니다.
+
+## License
+
+The upstream project and this fork are distributed under the GNU Affero General Public License
+v3.0. See [`LICENSE`](LICENSE) and [`NOTICE.md`](NOTICE.md).

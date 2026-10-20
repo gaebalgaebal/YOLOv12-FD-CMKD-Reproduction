@@ -1,0 +1,60 @@
+{
+  "checkpoint": "${REPO_ROOT}/runs/detect/yolov12m_low_lr_fdcmkd_x2m_fdl2sum_s0_staged/weights/last.pt",
+  "checkpoint_sha256_before": "1954a3fee3bb9ad51f58dacc12efb8d98e8a137c7223f2e6899c34162989fa00",
+  "checkpoint_sha256_after": "1954a3fee3bb9ad51f58dacc12efb8d98e8a137c7223f2e6899c34162989fa00",
+  "checkpoint_unchanged": true,
+  "parameter_sha256_before": "febc0289beb389b501610bb80e01950c1ac1a475b5810fc7fe539a8e9b616413",
+  "parameter_sha256_after": "febc0289beb389b501610bb80e01950c1ac1a475b5810fc7fe539a8e9b616413",
+  "parameters_unchanged": true,
+  "logical_epoch": 15,
+  "gradient_scale": 1.0,
+  "probe_batch_size": 1,
+  "amp": false,
+  "gradient_measurement": "FP32 forward and unscaled autograd",
+  "batches": 16,
+  "all_values_finite": true,
+  "median_combined_gradient_ratio": 0.007717985941879211,
+  "gate_evaluated": true,
+  "gate_pass": true,
+  "thresholds": {
+    "required_batches": 16,
+    "nonzero_batches_per_level": 15,
+    "median_per_level_gradient_ratio": 1e-05,
+    "median_combined_gradient_ratio": 0.001
+  },
+  "levels": [
+    {
+      "level": "P3",
+      "median_raw_fd_loss": 2.9617220163345337,
+      "median_effective_fd_loss": 0.07404305040836334,
+      "median_fd_grad_rms": 1.3456912029141677e-07,
+      "median_det_grad_rms": 9.447217162232845e-05,
+      "median_gradient_ratio": 0.0014317357038112065,
+      "median_gradient_cosine": -0.0003123697148711655,
+      "nonzero_batches": 16,
+      "finite_batches": 16
+    },
+    {
+      "level": "P4",
+      "median_raw_fd_loss": 2.856193423271179,
+      "median_effective_fd_loss": 0.2856193482875824,
+      "median_fd_grad_rms": 7.742673702699568e-07,
+      "median_det_grad_rms": 9.393869872667123e-05,
+      "median_gradient_ratio": 0.00801266780173316,
+      "median_gradient_cosine": -0.00038418426020892616,
+      "nonzero_batches": 16,
+      "finite_batches": 16
+    },
+    {
+      "level": "P5",
+      "median_raw_fd_loss": 2.766068458557129,
+      "median_effective_fd_loss": 0.27660685777664185,
+      "median_fd_grad_rms": 2.7890139362231903e-06,
+      "median_det_grad_rms": 0.00015387936222061385,
+      "median_gradient_ratio": 0.018508376446133346,
+      "median_gradient_cosine": -0.0004353477389677446,
+      "nonzero_batches": 16,
+      "finite_batches": 16
+    }
+  ]
+}

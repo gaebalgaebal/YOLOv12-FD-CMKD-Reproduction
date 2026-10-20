@@ -52,6 +52,7 @@ def _build_fd_cmkd_modules(model, teacher_w):
     low_freq_weight = float(os.environ.get("YOLO_FD_LOW_W", "1.0"))
     high_freq_weight = float(os.environ.get("YOLO_FD_HIGH_W", "1.0"))
     fd_loss_weight = float(os.environ.get("YOLO_FD_LOSS_W", "1.0"))
+    loss_reduction = os.environ.get("YOLO_FD_REDUCTION", "mean")
     model.fd_cmkd_adapters = nn.ModuleList([FDFeatureAdapter(sc, tc) for sc, tc in zip(s_channels, t_channels)])
     model.fd_cmkd_blocks = nn.ModuleList([
         FD_NLKD_Loss(
@@ -60,6 +61,7 @@ def _build_fd_cmkd_modules(model, teacher_w):
             low_freq_weight=low_freq_weight,
             high_freq_weight=high_freq_weight,
             loss_weight=fd_loss_weight,
+            loss_reduction=loss_reduction,
         ) for tc in t_channels
     ])
     model.fd_cmkd_student_channels = s_channels
@@ -69,6 +71,7 @@ def _build_fd_cmkd_modules(model, teacher_w):
     model.fd_cmkd_low_freq_weight = low_freq_weight
     model.fd_cmkd_high_freq_weight = high_freq_weight
     model.fd_cmkd_loss_weight = fd_loss_weight
+    model.fd_cmkd_loss_reduction = loss_reduction
 
 
 def _build_plain_kd_modules(model, teacher_w):

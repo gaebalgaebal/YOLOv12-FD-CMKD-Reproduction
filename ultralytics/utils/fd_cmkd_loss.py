@@ -125,6 +125,7 @@ class FD_NLKD_Loss(nn.Module):
         low_freq_weight=1.0,
         high_freq_weight=1.0,
         loss_weight=1.0,
+        loss_reduction="mean",
     ):
         super().__init__()
         self.in_channels = int(in_channels)
@@ -133,6 +134,9 @@ class FD_NLKD_Loss(nn.Module):
         self.low_freq_weight = float(low_freq_weight)
         self.high_freq_weight = float(high_freq_weight)
         self.loss_weight = float(loss_weight)
+        self.loss_reduction = str(loss_reduction)
+        if self.loss_reduction not in {"mean", "sample_sum"}:
+            raise ValueError(f"Unsupported FD loss reduction: {self.loss_reduction}")
         self.non_local_att = FDNonLocalAttention(
             self.in_channels,
             self.inter_channels,
@@ -148,6 +152,11 @@ class FD_NLKD_Loss(nn.Module):
         feat = self.dc_filter(feat)
         return l2_normalize_feature(feat)
 
+    def _distance_loss(self, student, teacher):
+        if self.loss_reduction == "sample_sum":
+            return (student - teacher).square().flatten(1).sum(1).mean()
+        return F.mse_loss(student, teacher)
+
     def forward(self, s_feature, t_feature):
         if s_feature.shape != t_feature.shape:
             raise RuntimeError(f"FD-CMKD feature shape mismatch: {tuple(s_feature.shape)} vs {tuple(t_feature.shape)}")
@@ -160,8 +169,8 @@ class FD_NLKD_Loss(nn.Module):
         low_t = l2_normalize_feature(low_t)
         high_s = l2_normalize_feature(high_s)
         high_t = l2_normalize_feature(high_t)
-        low_loss = F.mse_loss(low_s, low_t)
-        high_loss = F.mse_loss(signed_log1p(high_s), signed_log1p(high_t))
+        low_loss = self._distance_loss(low_s, low_t)
+        high_loss = self._distance_loss(signed_log1p(high_s), signed_log1p(high_t))
         self.last_low_loss = low_loss.detach()
         self.last_high_loss = high_loss.detach()
         return self.loss_weight * (self.low_freq_weight * low_loss + self.high_freq_weight * high_loss)

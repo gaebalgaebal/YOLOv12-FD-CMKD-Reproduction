@@ -1,0 +1,14 @@
+{
+  "gate_pass": false,
+  "decision": "stop_at_epoch5",
+  "median_det_loss": 3.5860506296157837,
+  "median_feature_kd_raw": 1.2489696018747054e-05,
+  "median_feature_kd_effective": 1.248969624612073e-06,
+  "median_head_kd_raw": 0.8168432414531708,
+  "median_head_kd_effective": 0.16336864829063416,
+  "feature_to_detection_loss_ratio": 3.4828555243959005e-07,
+  "feature_to_head_effective_loss_ratio": 7.645099825947913e-06,
+  "median_combined_gradient_ratio": 2.203982928573182e-08,
+  "combined_gate_shortfall_factor": 45372.40225573714,
+  "root_cause": "Global L2 normalization makes each feature tensor unit norm, then mean-reduced MSE divides the squared distance by C*H*W. The resulting 1e-6-scale raw losses are reduced again by KD weights."
+}
