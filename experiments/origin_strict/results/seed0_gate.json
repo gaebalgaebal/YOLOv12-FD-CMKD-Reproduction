@@ -1,0 +1,20 @@
+{
+  "official_best_delta": 0.0002437088054085823,
+  "last5_delta": -9.600000000009601e-05,
+  "threshold": 0.001,
+  "pass": false,
+  "run_additional_seeds": false,
+  "comparison_batch": 12,
+  "arms": {
+    "no_kd": {
+      "last5_mean": 0.50953,
+      "last5_sd": 0.00044988887516809653,
+      "official_best": 0.5096616476575724
+    },
+    "fd_cmkd": {
+      "last5_mean": 0.5094339999999999,
+      "last5_sd": 0.0004476940919869475,
+      "official_best": 0.509905356462981
+    }
+  }
+}

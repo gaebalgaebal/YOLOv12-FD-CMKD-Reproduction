@@ -1,0 +1,12 @@
+{
+  "label": "baseline",
+  "checkpoint": "/home/gpuadmin/YOLOv12-Distillation/runs/detect/yolov12m/weights/best.pt",
+  "checkpoint_sha256": "8efd99b51e0011b6ae15df51adb24dc71ee5a541e130d936c28678623c7f78b4",
+  "predictions": "/home/gpuadmin/YOLOv12-Distillation/output/fd_cmkd_origin_strict_2026-10-20/evaluations/baseline/predictions.json",
+  "AP50-95": 0.5083435734458736,
+  "AP50": 0.6805172725420235,
+  "AP75": 0.5522476702284593,
+  "AP_S": 0.3213332786296437,
+  "AP_M": 0.5623642097646423,
+  "AP_L": 0.6744319472461848
+}

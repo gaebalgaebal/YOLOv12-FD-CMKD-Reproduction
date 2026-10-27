@@ -1,0 +1,20 @@
+{
+  "imported_ultralytics": "/home/gpuadmin/YOLOv12-Distillation-origin-strict-548f2e2/ultralytics/__init__.py",
+  "no_kd_loss": 4.966336250305176,
+  "fd_zero_loss": 4.966336250305176,
+  "loss_abs_diff": 0.0,
+  "common_parameter_tensors": 406,
+  "compared_gradient_tensors": 405,
+  "max_initial_parameter_diff": 0.0,
+  "max_gradient_abs_diff": 0.0,
+  "relative_gradient_l2_diff": 0.0,
+  "simulated_lr": 0.0001,
+  "max_one_step_parameter_diff": 0.0,
+  "tolerances": {
+    "loss_abs": 1e-06,
+    "initial_param_abs": 0.0,
+    "gradient_relative_l2": 1e-06,
+    "update_abs": 1e-07
+  },
+  "pass": true
+}

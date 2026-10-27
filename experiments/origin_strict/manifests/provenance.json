@@ -1,0 +1,22 @@
+{
+  "captured_at": "2026-10-20T10:00:12+09:00",
+  "git_commit": "548f2e26f1e082ae4a1e4c3e435a08e5daa1e09a",
+  "git_dirty": false,
+  "origin": "/home/gpuadmin/YOLOv12-Distillation-origin-strict-548f2e2",
+  "imported_ultralytics": "FlashAttention is not available on this device. Using scaled_dot_product_attention instead.\n/home/gpuadmin/YOLOv12-Distillation-origin-strict-548f2e2/ultralytics/__init__.py",
+  "python": "3.10.12 (main, Jun 11 2023, 05:26:28) [GCC 11.4.0]",
+  "platform": "Linux-6.8.0-138-generic-x86_64-with-glibc2.35",
+  "torch": "2.7.1+cu128",
+  "cuda": "12.8",
+  "cudnn": 90701,
+  "gpu": "NVIDIA GeForce RTX 5080",
+  "checkpoints": {
+    "baseline": "8efd99b51e0011b6ae15df51adb24dc71ee5a541e130d936c28678623c7f78b4",
+    "teacher": "31dc58746d7e17314efaa7043af73c2e751ec3645fda3f38e60d87979ca5dc40"
+  },
+  "coco": {
+    "train_images": 118287,
+    "val_images": 5000,
+    "val_annotations": 36781
+  }
+}

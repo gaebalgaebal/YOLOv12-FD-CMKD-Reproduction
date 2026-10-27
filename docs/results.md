@@ -1,6 +1,35 @@
 # Results
 
-## Primary result
+## Origin-strict baseline (completed)
+
+The clean upstream commit `548f2e2` was evaluated with the original `mean` reduction, frequency
+mask, and KD weights. The no-KD and FD-CMKD arms used the same starting checkpoint, seed, data
+order, augmentation, optimizer policy, learning-rate schedule, and evaluator. FD-CMKD ran out of
+memory at batch 16 on the RTX 5080 16 GB GPU. Following the prespecified fallback, both arms were
+restarted from the same baseline at batch 12 and trained for 50 epochs.
+
+| Metric | no-KD | Origin FD-CMKD | Delta |
+|---|---:|---:|---:|
+| Official best AP50-95 | 0.509662 | 0.509905 | +0.000244 |
+| AP50 | 0.681031 | 0.680987 | -0.000044 |
+| AP75 | 0.556566 | 0.555429 | -0.001137 |
+| AP Small | 0.326668 | 0.327255 | +0.000588 |
+| AP Medium | 0.564727 | 0.563854 | -0.000873 |
+| AP Large | 0.676247 | 0.677651 | +0.001404 |
+| Last-five-epoch AP50-95 mean | 0.509530 | 0.509434 | -0.000096 |
+
+The predefined gate required an official best delta of at least `+0.001` and a positive
+last-five-epoch delta. Neither condition passed; additional seeds were therefore skipped.
+
+The zero-weight path matched no-KD exactly for loss, 405 parameter gradients, and the one-step
+update. The origin probe was finite and non-zero, but the median combined feature/detection
+gradient ratio was approximately `4.33e-9`. This makes a wiring failure unlikely and supports the
+hypothesis that the upstream reduction suppresses the feature-KD optimization signal.
+
+Machine-readable evidence is archived under
+[`experiments/origin_strict`](../experiments/origin_strict/README.md).
+
+## Earlier sample-sum result
 
 | Checkpoint | no-KD AP50-95 | FD `sample_sum` AP50-95 | Delta |
 |---|---:|---:|---:|

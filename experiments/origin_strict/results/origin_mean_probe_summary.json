@@ -1,0 +1,61 @@
+{
+  "checkpoint": "/home/gpuadmin/YOLOv12-Distillation/runs/detect/yolov12m/weights/best.pt",
+  "checkpoint_sha256_before": "8efd99b51e0011b6ae15df51adb24dc71ee5a541e130d936c28678623c7f78b4",
+  "checkpoint_sha256_after": "8efd99b51e0011b6ae15df51adb24dc71ee5a541e130d936c28678623c7f78b4",
+  "checkpoint_unchanged": true,
+  "parameter_sha256_before": "37f86de39859702536c6c7ce3e9c3af7c469fb6da176cb7aa37bb304a2f7e5f3",
+  "parameter_sha256_after": "37f86de39859702536c6c7ce3e9c3af7c469fb6da176cb7aa37bb304a2f7e5f3",
+  "parameters_unchanged": true,
+  "logical_epoch": 0,
+  "gradient_scale": 1.0,
+  "probe_batch_size": 1,
+  "amp": false,
+  "fd_reduction": "mean",
+  "gradient_measurement": "FP32 forward and unscaled autograd",
+  "batches": 16,
+  "all_values_finite": true,
+  "median_combined_gradient_ratio": 4.325161333913226e-09,
+  "gate_evaluated": false,
+  "gate_pass": null,
+  "thresholds": {
+    "required_batches": 16,
+    "nonzero_batches_per_level": 15,
+    "median_per_level_gradient_ratio": 1e-05,
+    "median_combined_gradient_ratio": 0.001
+  },
+  "levels": [
+    {
+      "level": "P3",
+      "median_raw_fd_loss": 1.22263310231574e-06,
+      "median_effective_fd_loss": 6.113165751386873e-09,
+      "median_fd_grad_rms": 1.0858079097842733e-14,
+      "median_det_grad_rms": 0.00010784066980704666,
+      "median_gradient_ratio": 9.907934725606032e-11,
+      "median_gradient_cosine": 0.0014343419008836906,
+      "nonzero_batches": 16,
+      "finite_batches": 16
+    },
+    {
+      "level": "P4",
+      "median_raw_fd_loss": 2.431718939988059e-06,
+      "median_effective_fd_loss": 4.8634381855094944e-08,
+      "median_fd_grad_rms": 1.276342342628145e-13,
+      "median_det_grad_rms": 9.550812553448294e-05,
+      "median_gradient_ratio": 1.3387519091060649e-09,
+      "median_gradient_cosine": 0.0016733057852101707,
+      "nonzero_batches": 16,
+      "finite_batches": 16
+    },
+    {
+      "level": "P5",
+      "median_raw_fd_loss": 9.740288078319281e-06,
+      "median_effective_fd_loss": 1.9480577861941129e-07,
+      "median_fd_grad_rms": 1.863103542645498e-12,
+      "median_det_grad_rms": 0.00020672115464088697,
+      "median_gradient_ratio": 9.404138004429028e-09,
+      "median_gradient_cosine": 0.001139335318411157,
+      "nonzero_batches": 16,
+      "finite_batches": 16
+    }
+  ]
+}

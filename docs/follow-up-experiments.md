@@ -1,6 +1,36 @@
 # Follow-up experiment roadmap
 
-Experiments are ordered to maximize information gained before committing to additional multi-day
+## Status snapshot
+
+| Priority | Experiment | Status |
+|---|---|---|
+| 1 | Scale-normalized feature reduction | **In progress** |
+| 2 | Head-only KD | Planned |
+| 3 | Conjugate-symmetric frequency mask only | Planned |
+| 4 | Selected reduction + symmetric mask | Conditional |
+| 5 | P3/P4/P5 scale ablations | Conditional |
+| 6 | Seeds 1-2 confirmation | Only after the seed-0 gate passes |
+
+The origin-strict seed-0 baseline is complete and failed its performance gate. The immediate
+follow-up changes only feature-loss scaling; the original mask, KD weights, data, optimizer,
+schedule, and evaluation policy remain fixed.
+
+## P0: scale-normalized reduction (in progress)
+
+Compare upstream `mean`, diagnostic `sample_sum`, and scale-normalized candidates on identical
+fixed batches. Record per-level loss, detection/feature/head gradient norms, gradient cosine,
+one-step parameter deltas, peak memory, and finite-value checks. Select a candidate only if it
+produces a measurable feature signal without dominating detection gradients or unintentionally
+weighting P3/P4/P5 by their raw element counts.
+
+The selected candidate will first receive a 5-10 epoch seed-0 screen. A full 50-epoch matched A/B
+run follows only if optimization remains stable and the curve is plausibly positive. Seeds 1-2
+remain gated on both:
+
+1. official best AP50-95 delta `>= +0.001`; and
+2. positive last-five-epoch AP50-95 delta.
+
+The remaining experiments are ordered to maximize information gained before committing to additional multi-day
 COCO training.
 
 ## P0: correctness gates

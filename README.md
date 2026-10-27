@@ -8,7 +8,25 @@
 > It evaluates an experimental `sample_sum` FD loss variant. It is neither an origin-strict
 > reproduction nor a paper-faithful implementation of FD-CMKD.
 
-## Main finding
+## Current status
+
+The exact upstream `mean` implementation has now also been evaluated in an origin-strict seed-0
+comparison. Batch 16 was not feasible for the FD arm on the 16 GB test GPU, so the prespecified
+fairness fallback restarted **both** arms from the same checkpoint at batch 12 for 50 epochs.
+
+| Origin-strict arm | Official COCO best AP50-95 | Last-5 mean |
+|---|---:|---:|
+| no-KD | 0.509662 | 0.509530 |
+| FD-CMKD upstream `mean` | 0.509905 | 0.509434 |
+| Difference | **+0.000244** | **-0.000096** |
+
+The seed-0 gate required at least `+0.001` official best AP50-95 and a positive last-five-epoch
+delta. It failed, so seeds 1-2 were not run. The highest-priority follow-up—testing a
+scale-normalized reduction while holding the mask and other settings fixed—is **in progress**.
+See the [origin-strict record](experiments/origin_strict/README.md) and
+[experiment roadmap](docs/follow-up-experiments.md).
+
+## Earlier sample-sum finding
 
 The original implementation L2-normalizes each `C x H x W` feature tensor and then applies
 mean-reduced MSE. A no-step gradient probe found that the effective FD feature contribution was
@@ -128,6 +146,12 @@ python3 -m unittest tests.test_fd_sample_sum
 커졌지만, 동일 시작점과 설정의 seed 0 비교에서 no-KD 대비 공식 COCO AP50-95가
 `0.000362` 낮았습니다. 따라서 현재 결론은 **기능 신호는 복구됐지만 성능 향상은 재현되지
 않았다**입니다. 후속 실험은 [로드맵](docs/follow-up-experiments.md)에 우선순위별로 정리했습니다.
+
+추가로 원본 commit과 원본 `mean` reduction을 유지한 50-epoch 비교를 수행했습니다. batch 16
+OOM 이후 두 arm을 동일 시작점의 batch 12로 공정하게 재시작했습니다. 공식 best AP50-95 차이는
+`+0.000244`였지만 마지막 5 epoch 평균 차이는 `-0.000096`이어서 사전 성능 게이트를 통과하지
+못했습니다. 현재는 feature KD의 극단적인 축소를 직접 겨냥한 **scale-normalized reduction
+단독 실험을 진행 중**입니다.
 
 ## License
 
